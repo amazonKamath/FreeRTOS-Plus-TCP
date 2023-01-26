@@ -132,7 +132,7 @@
                  * to most 3 times.  When there is no response, the socket get the
                  * status 'eCLOSE_WAIT'. */
                 FreeRTOS_debug_printf( ( "Connect: giving up %xip:%u\n",
-                                         ( unsigned ) pxSocket->u.xTCP.xRemoteIP.xIP_IPv4, /* IP address of remote machine. */
+                                         ( unsigned ) pxSocket->u.xTCP.xRemoteIP.ulIP_IPv4, /* IP address of remote machine. */
                                          pxSocket->u.xTCP.usRemotePort ) );                /* Port on remote machine. */
                 vTCPStateChange( pxSocket, eCLOSE_WAIT );
             }
@@ -895,7 +895,7 @@
                     if( pxSocket->u.xTCP.ucKeepRepCount > 3U ) /*_RB_ Magic number. */
                     {
                         FreeRTOS_debug_printf( ( "keep-alive: giving up %xip:%u\n",
-                                                 ( unsigned ) pxSocket->u.xTCP.xRemoteIP.xIP_IPv4, /* IP address of remote machine. */
+                                                 ( unsigned ) pxSocket->u.xTCP.xRemoteIP.ulIP_IPv4, /* IP address of remote machine. */
                                                  pxSocket->u.xTCP.usRemotePort ) );                /* Port on remote machine. */
                         vTCPStateChange( pxSocket, eCLOSE_WAIT );
                         lDataLen = -1;
@@ -921,7 +921,7 @@
                             if( xTCPWindowLoggingLevel != 0 )
                             {
                                 FreeRTOS_debug_printf( ( "keep-alive: %xip:%u count %u\n",
-                                                         ( unsigned ) pxSocket->u.xTCP.xRemoteIP.xIP_IPv4,
+                                                         ( unsigned ) pxSocket->u.xTCP.xRemoteIP.ulIP_IPv4,
                                                          pxSocket->u.xTCP.usRemotePort,
                                                          pxSocket->u.xTCP.ucKeepRepCount ) );
                             }

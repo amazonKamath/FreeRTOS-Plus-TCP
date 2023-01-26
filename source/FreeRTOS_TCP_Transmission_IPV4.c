@@ -343,7 +343,8 @@
                  * optimized away.
                  */
                 /* The source MAC addresses is fixed to 'ipLOCAL_MAC_ADDRESS'. */
-                pvCopySource = ipLOCAL_MAC_ADDRESS;
+                //pvCopySource = ipLOCAL_MAC_ADDRESS;
+                pvCopySource = pxNetworkBuffer->pxEndPoint->xMACAddress.ucBytes;
                 pvCopyDest = &pxEthernetHeader->xSourceAddress;
                 ( void ) memcpy( pvCopyDest, pvCopySource, ( size_t ) ipMAC_ADDRESS_LENGTH_BYTES );
 
@@ -373,7 +374,7 @@
                 configASSERT( pxNetworkBuffer->pxEndPoint->pxNetworkInterface->pfOutput != NULL );
 
                 NetworkInterface_t * pxInterface = pxNetworkBuffer->pxEndPoint->pxNetworkInterface;
-                ( void ) pxInterface->pfOutput( pxInterface, pxNetworkBuffer, xReleaseAfterSend );
+                ( void ) pxInterface->pfOutput( pxInterface, pxNetworkBuffer, xDoRelease );
 
                 if( xDoRelease == pdFALSE )
                 {

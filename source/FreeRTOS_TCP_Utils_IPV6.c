@@ -83,7 +83,7 @@
             }
         }
 
-        FreeRTOS_debug_printf( ( "prvSocketSetMSS: %u bytes for %xip:%u\n", ( unsigned ) ulMSS, ( unsigned ) pxSocket->u.xTCP.xRemoteIP.xIP_IPv4, pxSocket->u.xTCP.usRemotePort ) );
+        FreeRTOS_debug_printf( ( "prvSocketSetMSS: %u bytes for %xip:%u\n", ( unsigned ) ulMSS, ( unsigned ) pxSocket->u.xTCP.xRemoteIP.ulIP_IPv4, pxSocket->u.xTCP.usRemotePort ) );
 
         pxSocket->u.xTCP.usMSS = ( uint16_t ) ulMSS;
     }
