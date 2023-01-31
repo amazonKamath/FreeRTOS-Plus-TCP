@@ -51,7 +51,6 @@
 #include "FreeRTOS_ARP.h"
 #include "FreeRTOS_DNS.h"
 #include "FreeRTOS_DHCP.h"
-#include "FreeRTOS_ND.h"
 #include "FreeRTOS_IP_Utils.h"
 #include "NetworkInterface.h"
 #include "NetworkBufferManagement.h"
@@ -172,7 +171,7 @@ static eARPLookupResult_t prvStartLookup( NetworkBufferDescriptor_t * const pxNe
     if( pxUDPPacket->xEthernetHeader.usFrameType == ipIPv6_FRAME_TYPE )
     {
         FreeRTOS_printf( ( "Looking up %pip with%s end-point\n",
-                           pxNetworkBuffer->_xIPv6Address.ucBytes,
+                           pxNetworkBuffer->xIPAddress.xIP_IPv6,
                            ( pxNetworkBuffer->pxEndPoint != NULL ) ? "" : "out" ) );
 
         if( pxNetworkBuffer->pxEndPoint != NULL )
@@ -229,6 +228,14 @@ static eARPLookupResult_t prvStartLookup( NetworkBufferDescriptor_t * const pxNe
 void vProcessGeneratedUDPPacket( NetworkBufferDescriptor_t * const pxNetworkBuffer )
 {
     UDPPacket_t * pxUDPPacket;
+    IPHeader_t * pxIPHeader;
+    eARPLookupResult_t eReturned;
+    uint32_t ulIPAddress;
+    size_t uxPayloadSize;
+    /* memcpy() helper variables for MISRA Rule 21.15 compliance*/
+    const void * pvCopySource;
+    void * pvCopyDest;
+    BaseType_t xLostBuffer = pdFALSE;
 
     /* Map the UDP packet onto the start of the frame. */
 
@@ -282,12 +289,13 @@ BaseType_t xProcessReceivedUDPPacket( NetworkBufferDescriptor_t * pxNetworkBuffe
     if( pxUDPPacket->xEthernetHeader.usFrameType == ipIPv4_FRAME_TYPE )
     {
         xReturn = xProcessReceivedUDPPacket_IPv4( pxNetworkBuffer,
-                                        usPort, pxIsWaitingForARPResolution );
+                                                  usPort, pxIsWaitingForARPResolution );
     }
-    else if( pxUDPPacket->xEthernetHeader.usFrameType == ipIPv6_FRAME_TYPE )
+
+    if( pxUDPPacket->xEthernetHeader.usFrameType == ipIPv6_FRAME_TYPE )
     {
         xReturn = xProcessReceivedUDPPacket_IPv6( pxNetworkBuffer,
-                                        usPort, pxIsWaitingForARPResolution );
+                                                  usPort, pxIsWaitingForARPResolution );
     }
 
     return xReturn;

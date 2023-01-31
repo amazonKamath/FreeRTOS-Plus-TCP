@@ -294,7 +294,7 @@
                 /* ulChar2u32 reads from big-endian to host-endian. */
                 uint32_t ulIPAddress = ulChar2u32( pucAddress );
                 /* Translate to network-endian. */
-                pxAddrInfo->ai_addr->sin_addr = FreeRTOS_htonl( ulIPAddress );
+                pxAddrInfo->ai_addr->sin_addr.ulIP_IPv4 = FreeRTOS_htonl( ulIPAddress );
                 pxAddrInfo->ai_family = FREERTOS_AF_INET4;
                 pxAddrInfo->ai_addrlen = ipSIZE_OF_IPv4_ADDRESS;
             }
@@ -973,7 +973,7 @@
                     {
                         pxAddress->sin_family = FREERTOS_AF_INET;
                         pxAddress->sin_len = ( uint8_t ) sizeof( struct freertos_sockaddr );
-                        pxAddress->sin_addr = ulIPAddress;
+                        pxAddress->sin_addr.ulIP_IPv4 = ulIPAddress;
                         break;
                     }
                 }
@@ -1124,7 +1124,7 @@
                                                            uxHostType );
 
             /* ipLLMNR_IP_ADDR is in network byte order. */
-            if( ( pxAddress->sin_addr == ipLLMNR_IP_ADDR ) || ( pxAddress->sin_addr == ipMDNS_IP_ADDRESS ) )
+            if( ( pxAddress->sin_addr.ulIP_IPv4 == ipLLMNR_IP_ADDR ) || ( pxAddress->sin_addr.ulIP_IPv4 == ipMDNS_IP_ADDRESS ) )
             {
                 /* Use LLMNR addressing. */
                 ( ( ( DNSMessage_t * ) xDNSBuf.pucPayloadBuffer ) )->usFlags = 0;
@@ -1156,7 +1156,7 @@
                                         Socket_t xDNSSocket,
                                         struct freertos_addrinfo ** ppxAddressInfo,
                                         BaseType_t xFamily,
-                                        TickType_t uxReadTimeOut_ticks )
+                                        BaseType_t xRetryIndex )
     {
         uint32_t ulIPAddress = 0;
         struct freertos_sockaddr xAddress;
@@ -1175,7 +1175,7 @@
         {
             do
             {
-                if( xDNSSocket->usLocalPort == 0U )
+                if( xRetryIndex == 0 )
                 {
                     /* Bind the client socket to a random port number. */
                     uint16_t usPort = 0U;
@@ -1192,6 +1192,9 @@
                         FreeRTOS_printf( ( "DNS bind to %u failed\n", FreeRTOS_ntohs( usPort ) ) );
                         break;
                     }
+
+                    /* Increment retry Index to perform the bind operation only once */
+                    xRetryIndex++;
                 }
 
                 uxReturn = prvSendBuffer( pcHostName,
@@ -1208,12 +1211,11 @@
                 /* Create the message in the obtained buffer. */
 
                 /* receive a dns reply message */
-                xBytes = DNS_ReadReply( xDNSSocket,
+                DNS_ReadReply( xDNSSocket,
                                         &xRecvAddress,
                                         &xReceiveBuffer );
 
-                if( ( uxReadTimeOut_ticks > 0 ) &&
-                    ( pxEndPoint != NULL ) &&
+                if( ( pxEndPoint != NULL ) &&
                     ( ( xBytes == -pdFREERTOS_ERRNO_EWOULDBLOCK ) ||
                       ( xBytes == 0 ) ) )
                 {
@@ -1268,8 +1270,7 @@
                                                   TickType_t uxIdentifier,
                                                   Socket_t xDNSSocket,
                                                   struct freertos_addrinfo ** ppxAddressInfo,
-                                                  BaseType_t xFamily,
-                                                  TickType_t uxReadTimeOut_ticks )
+                                                  BaseType_t xFamily )
     {
         uint32_t ulIPAddress;
         BaseType_t xAttempt;
@@ -1281,7 +1282,7 @@
                                               xDNSSocket,
                                               ppxAddressInfo,
                                               xFamily,
-                                              uxReadTimeOut_ticks );
+                                              xAttempt ); /* xAttempt maps to xRetryIndex */
 
             if( ulIPAddress != 0U )
             { /* ip found, no need to retry */
@@ -1314,6 +1315,8 @@
     {
         Socket_t xDNSSocket;
         uint32_t ulIPAddress = 0U;
+        /* xRetryIndex is used to track the first retry to bind the socket only the first time.*/
+        BaseType_t xRetryIndex = 0;
 
 
         xDNSSocket = DNS_CreateSocket( uxReadTimeOut_ticks );
@@ -1322,13 +1325,12 @@
         {
             if( uxReadTimeOut_ticks == 0U )
             {
-                /* xRetryIndex is negative to tell that the socket is non-blocking. */
                 ulIPAddress = prvGetHostByNameOp( pcHostName,
                                                   uxIdentifier,
                                                   xDNSSocket,
                                                   ppxAddressInfo,
                                                   xFamily,
-                                                  uxReadTimeOut_ticks );
+                                                  xRetryIndex );
             }
             else
             {
@@ -1336,8 +1338,7 @@
                                                             uxIdentifier,
                                                             xDNSSocket,
                                                             ppxAddressInfo,
-                                                            xFamily,
-                                                            uxReadTimeOut_ticks );
+                                                            xFamily );
             }
 
             /* Finished with the socket. */

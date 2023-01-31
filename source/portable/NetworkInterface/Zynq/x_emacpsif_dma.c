@@ -539,8 +539,9 @@ int emacps_check_rx( xemacpsif_s * xemacpsif,
         else
         {
             pxBuffer->pxInterface = pxInterface;
-            pxBuffer->pxEndPoint = FreeRTOS_MatchingEndpoint( pxInterface, pxBuffer->pucEthernetBuffer );
-
+            //pxBuffer->pxEndPoint = FreeRTOS_MatchingEndpoint( pxInterface, pxBuffer->pucEthernetBuffer );
+            pxBuffer->pxEndPoint = pxInterface->pxEndPoint;
+            
             /* Just avoiding to use or refer to the same buffer again */
             pxDMA_rx_buffers[ xEMACIndex ][ rxHead ] = pxNewBuffer;
 

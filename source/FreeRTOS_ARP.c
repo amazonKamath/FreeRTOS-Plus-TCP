@@ -513,7 +513,11 @@ void vARPRefreshCacheEntry( const MACAddress_t * pxMACAddress,
                             const uint32_t ulIPAddress,
                             struct xNetworkEndPoint * pxEndPoint )
 {
-    #if ( ipconfigARP_STORES_REMOTE_ADDRESSES != 0 )
+    #if ( ipconfigARP_STORES_REMOTE_ADDRESSES == 0 )
+        BaseType_t xAddressIsLocal;
+    #endif
+
+    #if ( ipconfigARP_STORES_REMOTE_ADDRESSES == 0 )
 
         /* Only process the IP address if it matches with one of the end-points. */
         if( xAddressIsLocal != 0 )

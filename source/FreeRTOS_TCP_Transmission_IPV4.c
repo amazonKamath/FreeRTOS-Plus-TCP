@@ -90,6 +90,7 @@
         IPHeader_IPv6_t * pxIPHeader_IPv6 = NULL;
         BaseType_t xDoRelease = xReleaseAfterSend;
         EthernetHeader_t * pxEthernetHeader = NULL;
+        uint32_t ulSourceAddress;
         NetworkBufferDescriptor_t * pxNetworkBuffer = pxDescriptor;
         NetworkBufferDescriptor_t xTempBuffer;
         /* memcpy() helper variables for MISRA Rule 21.15 compliance*/
@@ -146,7 +147,6 @@
                 #endif
                 pxNetworkBuffer->pucEthernetBuffer = pxSocket->u.xTCP.xPacket.u.ucLastPacket;
                 pxNetworkBuffer->xDataLength = sizeof( pxSocket->u.xTCP.xPacket.u.ucLastPacket );
-                /* pxNetworkBuffer may have changed, reload pxIPHeader. */
                 pxIPHeader = ( ( IPHeader_t * ) &( pxNetworkBuffer->pucEthernetBuffer[ ipSIZE_OF_ETH_HEADER ] ) );
                 xDoRelease = pdFALSE;
             }
@@ -217,6 +217,9 @@
 
                 if( usFrameType == ipIPv6_FRAME_TYPE )
                 {
+                    /* Map the ethernet buffer onto a IPHeader_IPv6_t struct for easy access to the fields. */
+                    pxIPHeader_IPv6 = ( ( IPHeader_IPv6_t * ) &( pxNetworkBuffer->pucEthernetBuffer[ ipSIZE_OF_ETH_HEADER ] ) );
+
                     /* When xIsIPv6 is true: Let lint know that
                      * 'pxIPHeader_IPv6' is not NULL. */
                     configASSERT( pxIPHeader_IPv6 != NULL );
@@ -251,27 +254,26 @@
                 }
                 else
                 {
-                    /* _HT_ must get rid of 'ipLOCAL_IP_ADDRESS_POINTER'. */
-                    uint32_t ulSourceAddress = *ipLOCAL_IP_ADDRESS_POINTER;
-                    uint32_t ulDestinationAddress;
+                    /* Map the ethernet buffer onto a IPHeader_t struct for easy access to the fields. */
+                    pxIPHeader = ( ( IPHeader_t * ) &( pxNetworkBuffer->pucEthernetBuffer[ ipSIZE_OF_ETH_HEADER ] ) );
 
                     pxIPHeader->ucTimeToLive = ( uint8_t ) ipconfigTCP_TIME_TO_LIVE;
                     pxIPHeader->usLength = FreeRTOS_htons( ulLen );
 
-                    if( pxSocket != NULL )
-                    {
-                        ulDestinationAddress = FreeRTOS_htonl( pxSocket->u.xTCP.xRemoteIP.ulIP_IPv4 );
-                    }
-                    else
+                    if( ( pxSocket == NULL ) || ( *ipLOCAL_IP_ADDRESS_POINTER == 0U ) )
                     {
                         /* When pxSocket is NULL, this function is called by prvTCPSendReset()
                          * and the IP-addresses must be swapped.
                          * Also swap the IP-addresses in case the IP-tack doesn't have an
                          * IP-address yet, i.e. when ( *ipLOCAL_IP_ADDRESS_POINTER == 0U ). */
-                        ulDestinationAddress = pxIPHeader->ulSourceIPAddress;
+                        ulSourceAddress = pxIPHeader->ulDestinationIPAddress;
+                    }
+                    else
+                    {
+                        ulSourceAddress = *ipLOCAL_IP_ADDRESS_POINTER;
                     }
 
-                    pxIPHeader->ulDestinationIPAddress = ulDestinationAddress;
+                    pxIPHeader->ulDestinationIPAddress = pxIPHeader->ulSourceIPAddress;
                     pxIPHeader->ulSourceIPAddress = ulSourceAddress;
 
                     /* Just an increasing number. */
@@ -343,8 +345,7 @@
                  * optimized away.
                  */
                 /* The source MAC addresses is fixed to 'ipLOCAL_MAC_ADDRESS'. */
-                //pvCopySource = ipLOCAL_MAC_ADDRESS;
-                pvCopySource = pxNetworkBuffer->pxEndPoint->xMACAddress.ucBytes;
+                pvCopySource = &pxNetworkBuffer->pxEndPoint->xMACAddress;
                 pvCopyDest = &pxEthernetHeader->xSourceAddress;
                 ( void ) memcpy( pvCopyDest, pvCopySource, ( size_t ) ipMAC_ADDRESS_LENGTH_BYTES );
 
@@ -366,15 +367,12 @@
 
                 /* Send! */
                 iptraceNETWORK_INTERFACE_OUTPUT( pxNetworkBuffer->xDataLength, pxNetworkBuffer->pucEthernetBuffer );
-
-                /* _HT_ added some asserts that are useful while testing. */
-                configASSERT( pxNetworkBuffer != NULL );
-                configASSERT( pxNetworkBuffer->pxEndPoint != NULL );
-                configASSERT( pxNetworkBuffer->pxEndPoint->pxNetworkInterface != NULL );
-                configASSERT( pxNetworkBuffer->pxEndPoint->pxNetworkInterface->pfOutput != NULL );
-
                 NetworkInterface_t * pxInterface = pxNetworkBuffer->pxEndPoint->pxNetworkInterface;
-                ( void ) pxInterface->pfOutput( pxInterface, pxNetworkBuffer, xDoRelease );
+
+                if( pxInterface != NULL )
+                {
+                    ( void ) pxInterface->pfOutput( pxInterface, pxNetworkBuffer, xDoRelease );
+                }
 
                 if( xDoRelease == pdFALSE )
                 {

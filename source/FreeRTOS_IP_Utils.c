@@ -186,8 +186,6 @@ NetworkBufferDescriptor_t * pxDuplicateNetworkBufferWithDescriptor( const Networ
 
     if( pxNewBuffer != NULL )
     {
-        configASSERT( pxNewBuffer->pucEthernetBuffer != NULL );
-
         /* Get the minimum of both values to copy the data. */
         if( uxLengthToCopy > pxNetworkBuffer->xDataLength )
         {
@@ -206,7 +204,7 @@ NetworkBufferDescriptor_t * pxDuplicateNetworkBufferWithDescriptor( const Networ
         pxNewBuffer->pxEndPoint = pxNetworkBuffer->pxEndPoint;
         ( void ) memcpy( pxNewBuffer->pucEthernetBuffer, pxNetworkBuffer->pucEthernetBuffer, uxLengthToCopy );
 
-        if( uxIPHeaderSizePacket( pxNewBuffer ) == ipSIZE_OF_IPv6_HEADER )
+        if( uxIPHeaderSizePacket( pxNetworkBuffer ) == ipSIZE_OF_IPv6_HEADER )
         {
             ( void ) memcpy( pxNewBuffer->xIPAddress.xIP_IPv6.ucBytes, pxNetworkBuffer->xIPAddress.xIP_IPv6.ucBytes, ipSIZE_OF_IPv6_ADDRESS );
         }
@@ -473,7 +471,6 @@ static void prvChecksumProtocolCalculate( BaseType_t xOutgoingPacket,
         pxSet->usChecksum = ( uint16_t )
                             ( ~usGenerateChecksum( 0U, &( pucEthernetBuffer[ ipSIZE_OF_ETH_HEADER + pxSet->uxIPHeaderLength ] ), ( size_t ) pxSet->usProtocolBytes ) );
     }
-
     else if( ( pxSet->xIsIPv6 != pdFALSE ) && ( pxSet->ucProtocol == ( uint8_t ) ipPROTOCOL_ICMP_IPv6 ) )
     {
         pxSet->usChecksum = ( uint16_t )
@@ -616,7 +613,7 @@ NetworkBufferDescriptor_t * pxUDPPayloadBuffer_to_NetworkBuffer( const void * pv
         /* The input here is a pointer to a payload buffer.  Subtract
          * the total size of a UDP/IP packet plus the size of the header in
          * the network buffer, usually 8 + 2 bytes. */
-        #if ( ipconfigUSE_IPv6 != 0 )
+        #if ( ipconfigUSE_IPV6 != 0 )
             {
                 uintptr_t uxTypeOffset;
                 const uint8_t * pucIPType;
@@ -649,11 +646,11 @@ NetworkBufferDescriptor_t * pxUDPPayloadBuffer_to_NetworkBuffer( const void * pv
                     uxOffset = sizeof( UDPPacket_t );
                 }
             }
-        #else /* if ( ipconfigUSE_IPv6 != 0 ) */
+        #else /* if ( ipconfigUSE_IPV6 != 0 ) */
             {
                 uxOffset = sizeof( UDPPacket_t );
             }
-        #endif /* ipconfigUSE_IPv6 */
+        #endif /* ipconfigUSE_IPV6 */
 
         pxResult = prvPacketBuffer_to_NetworkBuffer( pvBuffer, uxOffset );
     }
@@ -787,7 +784,7 @@ void prvProcessNetworkDownEvent( NetworkInterface_t * pxInterface )
                     vRAProcess( pdTRUE, pxEndPoint );
                 }
                 else
-            #endif /* ( #if( ipconfigUSE_IPv6 != 0 ) */
+            #endif /* ( #if( ipconfigUSE_IPV6 != 0 ) */
 
             {
                 if( pxEndPoint->bits.bIPv6 != pdFALSE_UNSIGNED )
@@ -798,8 +795,6 @@ void prvProcessNetworkDownEvent( NetworkInterface_t * pxInterface )
                 {
                     ( void ) memcpy( &( pxEndPoint->ipv4_settings ), &( pxEndPoint->ipv4_defaults ), sizeof( pxEndPoint->ipv4_settings ) );
                 }
-
-                *ipLOCAL_IP_ADDRESS_POINTER = pxEndPoint->ipv4_settings.ulIPAddress;
 
                 /* DHCP or Router Advertisement are not enabled for this end-point.
                  * Perform any necessary 'network up' processing. */
@@ -1280,7 +1275,7 @@ uint16_t usGenerateChecksum( uint16_t usSum,
         else if( ( uxMinLastSize * ipMONITOR_PERCENTAGE_90 ) > ( uxMinSize * ipMONITOR_PERCENTAGE_100 ) )
         {
             uxMinLastSize = uxMinSize;
-            FreeRTOS_printf( ( "Heap: current %u lowest %u\n", ( unsigned ) xPortGetFreeHeapSize(), ( unsigned ) uxMinSize ) );
+            FreeRTOS_printf( ( "Heap: current %lu lowest %lu\n", xPortGetFreeHeapSize(), uxMinSize ) );
         }
         else
         {

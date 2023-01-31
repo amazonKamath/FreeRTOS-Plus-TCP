@@ -458,7 +458,7 @@ static BaseType_t prvDetermineSocketSize( BaseType_t xDomain,
     else
     {
         /* Only Ethernet is currently supported. */
-        #if ( ipconfigUSE_IPv6 == 0 )
+        #if ( ipconfigUSE_IPV6 == 0 )
             {
                 configASSERT( xDomain == FREERTOS_AF_INET );
             }
@@ -1022,7 +1022,7 @@ static NetworkBufferDescriptor_t * prvRecvFromWaitForPacket( FreeRTOS_Socket_t c
                                                              EventBits_t * pxEventBits )
 {
     BaseType_t xTimed = pdFALSE;
-    TickType_t xRemainingTime = pxSocket->xReceiveBlockTime;
+    TickType_t xRemainingTime;
     BaseType_t lPacketCount;
     TimeOut_t xTimeOut;
     EventBits_t xEventBits = ( EventBits_t ) 0;
@@ -1036,6 +1036,8 @@ static NetworkBufferDescriptor_t * prvRecvFromWaitForPacket( FreeRTOS_Socket_t c
         {
             /* Check to see if the socket is non blocking on the first
              * iteration.  */
+            xRemainingTime = pxSocket->xReceiveBlockTime;
+
             if( xRemainingTime == ( TickType_t ) 0 )
             {
                 #if ( ipconfigSUPPORT_SIGNALS != 0 )
@@ -1393,12 +1395,20 @@ static int32_t prvSendTo_ActualSend( const FreeRTOS_Socket_t * pxSocket,
     TimeOut_t xTimeOut;
     NetworkBufferDescriptor_t * pxNetworkBuffer;
 
-    if( ( ( ( UBaseType_t ) xFlags & ( UBaseType_t ) FREERTOS_MSG_DONTWAIT ) != 0U ) ||
-        ( xIsCallingFromIPTask() != pdFALSE ) )
+    #if ( ipconfigUSE_CALLBACKS != 0 )
+        {
+            if( xIsCallingFromIPTask() != pdFALSE )
+            {
+                /* The caller wants a non-blocking operation. When called by the IP-task,
+                 * the operation should always be non-blocking. */
+                xTicksToWait = ( TickType_t ) 0U;
+            }
+        }
+    #endif /* ipconfigUSE_CALLBACKS */
+
+    if( ( ( UBaseType_t ) xFlags & ( UBaseType_t ) FREERTOS_MSG_DONTWAIT ) != 0U )
     {
-        /* The caller wants a non-blocking operation. When called by the IP-task,
-         * the operation should always be non-blocking. */
-        xTicksToWait = ( TickType_t ) 0U;
+        xTicksToWait = ( TickType_t ) 0;
     }
 
     if( ( ( UBaseType_t ) xFlags & ( UBaseType_t ) FREERTOS_ZERO_COPY ) == 0U )
@@ -1421,6 +1431,8 @@ static int32_t prvSendTo_ActualSend( const FreeRTOS_Socket_t * pxSocket,
                 /* The entire block time has been used up. */
                 xTicksToWait = ( TickType_t ) 0;
             }
+
+            pxNetworkBuffer->pxEndPoint = NULL;
         }
     }
     else
@@ -1433,7 +1445,6 @@ static int32_t prvSendTo_ActualSend( const FreeRTOS_Socket_t * pxSocket,
 
     if( pxNetworkBuffer != NULL )
     {
-        pxNetworkBuffer->pxEndPoint = pxSocket->pxEndPoint;
         lReturn = prvSendUDPPacket( pxSocket,
                                     pxNetworkBuffer,
                                     uxTotalDataLength,
@@ -1579,12 +1590,12 @@ BaseType_t FreeRTOS_bind( Socket_t xSocket,
         {
             if( pxAddress->sin_family == ( uint8_t ) FREERTOS_AF_INET6 )
             {
-                ( void ) memcpy( pxSocket->xLocalAddress.xIP_IPv6.ucBytes, pxAddress->sin_addr6.ucBytes, sizeof( pxSocket->xLocalAddress.xIP_IPv6.ucBytes ) );
+                ( void ) memcpy( pxSocket->xLocalAddress.xIP_IPv6.ucBytes, pxAddress->sin_addr.xIP_IPv6.ucBytes, sizeof( pxSocket->xLocalAddress.xIP_IPv6.ucBytes ) );
                 pxSocket->bits.bIsIPv6 = pdTRUE_UNSIGNED;
             }
             else
             {
-                pxSocket->xLocalAddress.ulIP_IPv4 = FreeRTOS_ntohl( pxAddress->sin_addr );
+                pxSocket->xLocalAddress.ulIP_IPv4 = FreeRTOS_ntohl( pxAddress->sin_addr.ulIP_IPv4 );
                 pxSocket->bits.bIsIPv6 = pdFALSE_UNSIGNED;
             }
 
@@ -1663,11 +1674,11 @@ static BaseType_t prvSocketBindAdd( FreeRTOS_Socket_t * pxSocket,
         if( pxAddress->sin_family == ( uint8_t ) FREERTOS_AF_INET6 )
         {
             pxSocket->xLocalAddress.ulIP_IPv4 = 0U;
-            ( void ) memcpy( pxSocket->xLocalAddress.xIP_IPv6.ucBytes, pxAddress->sin_addr6.ucBytes, sizeof( pxSocket->xLocalAddress.xIP_IPv6.ucBytes ) );
+            ( void ) memcpy( pxSocket->xLocalAddress.xIP_IPv6.ucBytes, pxAddress->sin_addr.xIP_IPv6.ucBytes, sizeof( pxSocket->xLocalAddress.xIP_IPv6.ucBytes ) );
         }
-        else if( pxAddress->sin_addr != FREERTOS_INADDR_ANY )
+        else if( pxAddress->sin_addr.ulIP_IPv4 != FREERTOS_INADDR_ANY )
         {
-            pxSocket->pxEndPoint = FreeRTOS_FindEndPointOnIP_IPv4( pxAddress->sin_addr, 7 );
+            pxSocket->pxEndPoint = FreeRTOS_FindEndPointOnIP_IPv4( pxAddress->sin_addr.ulIP_IPv4, 7 );
         }
         else
         {
@@ -2694,7 +2705,7 @@ BaseType_t FreeRTOS_setsockopt( Socket_t xSocket,
                     /* Each socket has a semaphore on which the using task normally
                      * sleeps. */
                     case FREERTOS_SO_SET_SEMAPHORE:
-                        pxSocket->pxUserSemaphore = *( ( SemaphoreHandle_t * ) pvOptionValue );
+                        pxSocket->pxUserSemaphore = *( ipPOINTER_CAST( SemaphoreHandle_t *, pvOptionValue ) );
                         xReturn = 0;
                         break;
                 #endif /* ipconfigSOCKET_HAS_USER_SEMAPHORE */
@@ -2908,7 +2919,7 @@ FreeRTOS_Socket_t * pxUDPSocketLookup( UBaseType_t uxLocalPort )
 
 /*-----------------------------------------------------------*/
 
-#define sockDIGIT_COUNT    ( 3U ) /**< Each nibble is expressed in at most 3 digits such as "192". */
+#define sockDIGIT_COUNT    ( 3U )    /**< Each nibble is expressed in at most 3 digits such as "192". */
 
 /**
  * @brief Convert the 32-bit representation of the IP-address to the dotted decimal
@@ -3292,7 +3303,7 @@ size_t FreeRTOS_GetLocalAddress( ConstSocket_t xSocket,
     {
         pxAddress->sin_family = FREERTOS_AF_INET6;
         /* IP address of local machine. */
-        ( void ) memcpy( pxAddress->sin_addr6.ucBytes, pxSocket->xLocalAddress.xIP_IPv6.ucBytes, sizeof( pxAddress->sin_addr6.ucBytes ) );
+        ( void ) memcpy( pxAddress->sin_addr.xIP_IPv6.ucBytes, pxSocket->xLocalAddress.xIP_IPv6.ucBytes, sizeof( pxAddress->sin_addr.xIP_IPv6.ucBytes ) );
         /* Local port on this machine. */
         pxAddress->sin_port = FreeRTOS_htons( pxSocket->usLocalPort );
     }
@@ -3301,7 +3312,7 @@ size_t FreeRTOS_GetLocalAddress( ConstSocket_t xSocket,
         pxAddress->sin_family = FREERTOS_AF_INET;
         pxAddress->sin_len = ( uint8_t ) sizeof( *pxAddress );
         /* IP address of local machine. */
-        pxAddress->sin_addr = FreeRTOS_htonl( pxSocket->xLocalAddress.ulIP_IPv4 );
+        pxAddress->sin_addr.ulIP_IPv4 = FreeRTOS_htonl( pxSocket->xLocalAddress.ulIP_IPv4 );
 
         /* Local port on this machine. */
         pxAddress->sin_port = FreeRTOS_htons( pxSocket->usLocalPort );
@@ -3503,21 +3514,21 @@ void vSocketWakeUpUser( FreeRTOS_Socket_t * pxSocket )
                 {
                     pxSocket->bits.bIsIPv6 = pdTRUE_UNSIGNED;
                     FreeRTOS_printf( ( "FreeRTOS_connect: %u to %pip port %u\n",
-                                       pxSocket->usLocalPort, pxAddress->sin_addr6.ucBytes, FreeRTOS_ntohs( pxAddress->sin_port ) ) );
-                    ( void ) memcpy( pxSocket->u.xTCP.xRemoteIP.xIP_IPv6.ucBytes, pxAddress->sin_addr6.ucBytes, sizeof( pxSocket->xLocalAddress.xIP_IPv6.ucBytes ) );
+                                       pxSocket->usLocalPort, pxAddress->sin_addr.xIP_IPv6.ucBytes, FreeRTOS_ntohs( pxAddress->sin_port ) ) );
+                    ( void ) memcpy( pxSocket->u.xTCP.xRemoteIP.xIP_IPv6.ucBytes, pxAddress->sin_addr.xIP_IPv6.ucBytes, sizeof( pxSocket->xLocalAddress.xIP_IPv6.ucBytes ) );
                 }
                 else
                 {
                     pxSocket->bits.bIsIPv6 = pdFALSE_UNSIGNED;
                     FreeRTOS_printf( ( "FreeRTOS_connect: %u to %lxip:%u\n",
-                                       pxSocket->usLocalPort, FreeRTOS_ntohl( pxAddress->sin_addr ), FreeRTOS_ntohs( pxAddress->sin_port ) ) );
+                                       pxSocket->usLocalPort, FreeRTOS_ntohl( pxAddress->sin_addr.ulIP_IPv4 ), FreeRTOS_ntohs( pxAddress->sin_port ) ) );
                 }
 
                 /* Port on remote machine. */
                 pxSocket->u.xTCP.usRemotePort = FreeRTOS_ntohs( pxAddress->sin_port );
 
                 /* IP address of remote machine. */
-                pxSocket->u.xTCP.xRemoteIP.ulIP_IPv4 = FreeRTOS_ntohl( pxAddress->sin_addr );
+                pxSocket->u.xTCP.xRemoteIP.ulIP_IPv4 = FreeRTOS_ntohl( pxAddress->sin_addr.ulIP_IPv4 );
 
                 /* (client) internal state: socket wants to send a connect. */
                 vTCPStateChange( pxSocket, eCONNECT_SYN );
@@ -3688,25 +3699,25 @@ void vSocketWakeUpUser( FreeRTOS_Socket_t * pxSocket )
         {
             if( pxClientSocket->bits.bIsIPv6 != pdFALSE_UNSIGNED )
             {
-                *pxAddressLength = sizeof( struct freertos_sockaddr );
-
                 if( pxAddress != NULL )
                 {
+                    *pxAddressLength = sizeof( struct freertos_sockaddr );
+
                     pxAddress->sin_family = FREERTOS_AF_INET6;
                     /* Copy IP-address and port number. */
-                    ( void ) memcpy( pxAddress->sin_addr6.ucBytes, pxClientSocket->u.xTCP.xRemoteIP.xIP_IPv6.ucBytes, ipSIZE_OF_IPv6_ADDRESS );
+                    ( void ) memcpy( pxAddress->sin_addr.xIP_IPv6.ucBytes, pxClientSocket->u.xTCP.xRemoteIP.xIP_IPv6.ucBytes, ipSIZE_OF_IPv6_ADDRESS );
                     pxAddress->sin_port = FreeRTOS_ntohs( pxClientSocket->u.xTCP.usRemotePort );
                 }
             }
             else
             {
-                *pxAddressLength = sizeof( struct freertos_sockaddr );
-
                 if( pxAddress != NULL )
                 {
+                    *pxAddressLength = sizeof( struct freertos_sockaddr );
+
                     pxAddress->sin_family = FREERTOS_AF_INET4;
                     /* Copy IP-address and port number. */
-                    pxAddress->sin_addr = FreeRTOS_ntohl( pxClientSocket->u.xTCP.xRemoteIP.ulIP_IPv4 );
+                    pxAddress->sin_addr.ulIP_IPv4 = FreeRTOS_ntohl( pxClientSocket->u.xTCP.xRemoteIP.ulIP_IPv4 );
                     pxAddress->sin_port = FreeRTOS_ntohs( pxClientSocket->u.xTCP.usRemotePort );
                 }
             }
@@ -4281,14 +4292,18 @@ void vSocketWakeUpUser( FreeRTOS_Socket_t * pxSocket )
                 /* Only in the first round, check for non-blocking. */
                 xRemainingTime = pxSocket->xSendBlockTime;
 
-                if( xIsCallingFromIPTask() != pdFALSE )
-                {
-                    /* If this send function is called from within a
-                     * call-back handler it may not block, otherwise
-                     * chances would be big to get a deadlock: the IP-task
-                     * waiting for itself. */
-                    xRemainingTime = ( TickType_t ) 0U;
-                }
+                #if ( ipconfigUSE_CALLBACKS != 0 )
+                    {
+                        if( xIsCallingFromIPTask() != pdFALSE )
+                        {
+                            /* If this send function is called from within a
+                             * call-back handler it may not block, otherwise
+                             * chances would be big to get a deadlock: the IP-task
+                             * waiting for itself. */
+                            xRemainingTime = ( TickType_t ) 0U;
+                        }
+                    }
+                #endif /* ipconfigUSE_CALLBACKS */
 
                 if( xRemainingTime == ( TickType_t ) 0U )
                 {
@@ -4348,13 +4363,11 @@ void vSocketWakeUpUser( FreeRTOS_Socket_t * pxSocket )
         BaseType_t xByteCount = -pdFREERTOS_ERRNO_EINVAL;
         FreeRTOS_Socket_t * pxSocket = ( FreeRTOS_Socket_t * ) xSocket;
 
-        if( pvBuffer != NULL )
-        {
-            /* Check if this is a valid TCP socket, affirm that it is not closed or closing,
-             * affirm that there was not malloc-problem, test if uxDataLength is non-zero,
-             * and if the connection is not in a confirmed FIN state. */
-            xByteCount = ( BaseType_t ) prvTCPSendCheck( pxSocket, uxDataLength );
-        }
+
+        /* Check if this is a valid TCP socket, affirm that it is not closed or closing,
+         * affirm that there was not malloc-problem, test if uxDataLength is non-zero,
+         * and if the connection is not in a confirmed FIN state. */
+        xByteCount = ( BaseType_t ) prvTCPSendCheck( pxSocket, uxDataLength );
 
         if( xByteCount > 0 )
         {
@@ -4856,7 +4869,7 @@ void vSocketWakeUpUser( FreeRTOS_Socket_t * pxSocket )
 
             if( pucBuffer != NULL )
             {
-                ucReadPtr = ( uint8_t * ) pucBuffer;
+                ucReadPtr = ipPOINTER_CAST( uint8_t *, pucBuffer );
                 ulCount = ulByteCount;
                 pucBuffer = NULL;
             }
@@ -5056,7 +5069,7 @@ void vSocketWakeUpUser( FreeRTOS_Socket_t * pxSocket )
                 pxAddress->sin_family = FREERTOS_AF_INET6;
 
                 /* IP address of remote machine. */
-                ( void ) memcpy( pxAddress->sin_addr6.ucBytes, pxSocket->u.xTCP.xRemoteIP.xIP_IPv6.ucBytes, sizeof( pxAddress->sin_addr6.ucBytes ) );
+                ( void ) memcpy( pxAddress->sin_addr.xIP_IPv6.ucBytes, pxSocket->u.xTCP.xRemoteIP.xIP_IPv6.ucBytes, sizeof( pxAddress->sin_addr.xIP_IPv6.ucBytes ) );
 
                 /* Port of remote machine. */
                 pxAddress->sin_port = FreeRTOS_htons( pxSocket->u.xTCP.usRemotePort );
@@ -5067,7 +5080,7 @@ void vSocketWakeUpUser( FreeRTOS_Socket_t * pxSocket )
                 pxAddress->sin_family = FREERTOS_AF_INET;
 
                 /* IP address of remote machine. */
-                pxAddress->sin_addr = FreeRTOS_htonl( pxSocket->u.xTCP.xRemoteIP.ulIP_IPv4 );
+                pxAddress->sin_addr.ulIP_IPv4 = FreeRTOS_htonl( pxSocket->u.xTCP.xRemoteIP.ulIP_IPv4 );
 
                 /* Port on remote machine. */
                 pxAddress->sin_port = FreeRTOS_htons( pxSocket->u.xTCP.usRemotePort );
@@ -5457,13 +5470,18 @@ BaseType_t xSocketValid( const ConstSocket_t xSocket )
     static void vTCPNetStat_TCPSocket( const FreeRTOS_Socket_t * pxSocket )
     {
         char pcRemoteIp[ 40 ];
-        int xIPWidth = 32;
+        int xIPWidth = 16;
 
         #if ( ipconfigTCP_KEEP_ALIVE == 1 )
             TickType_t age = xTaskGetTickCount() - pxSocket->u.xTCP.xLastAliveTime;
         #else
             TickType_t age = 0U;
         #endif
+
+        if( uxIPHeaderSizeSocket( pxSocket ) == ipSIZE_OF_IPv6_HEADER )
+        {
+            xIPWidth = 32;
+        }
 
         char ucChildText[ 16 ] = "";
 
@@ -5477,11 +5495,6 @@ BaseType_t xSocketValid( const ConstSocket_t xSocket )
             /* These should never evaluate to false since the buffers are both shorter than 5-6 characters (<=65535) */
             configASSERT( copied_len >= 0 );                                /* LCOV_EXCL_BR_LINE the 'taken' branch will never execute. See the above comment. */
             configASSERT( copied_len < ( int32_t ) sizeof( ucChildText ) ); /* LCOV_EXCL_BR_LINE the 'taken' branch will never execute. See the above comment. */
-        }
-
-        if( age > 999999U )
-        {
-            age = 999999U;
         }
 
         if( pxSocket->bits.bIsIPv6 != pdFALSE_UNSIGNED )
@@ -5531,8 +5544,8 @@ BaseType_t xSocketValid( const ConstSocket_t xSocket )
         {
             /* Casting a "MiniListItem_t" to a "ListItem_t".
              * This is safe because only its address is being accessed, not its fields. */
-            const ListItem_t * pxEndTCP = ( ( const ListItem_t * ) &( xBoundTCPSocketsList.xListEnd ) );
-            const ListItem_t * pxEndUDP = ( ( const ListItem_t * ) &( xBoundUDPSocketsList.xListEnd ) );
+            const ListItem_t * pxEndTCP = listGET_END_MARKER( &xBoundTCPSocketsList );
+            const ListItem_t * pxEndUDP = listGET_END_MARKER( &xBoundUDPSocketsList );
 
             FreeRTOS_printf( ( "Prot Port IP-Remote       : Port  R/T Status       Alive  tmout Child\n" ) );
 

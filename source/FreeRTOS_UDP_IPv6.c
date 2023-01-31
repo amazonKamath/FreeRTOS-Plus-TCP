@@ -61,7 +61,7 @@
 #endif
 
 /* *INDENT-OFF* */
-    #if( ipconfigUSE_IPv6 != 0 )
+    #if( ipconfigUSE_IPV6 != 0 )
 /* *INDENT-ON* */
 
 
@@ -455,8 +455,8 @@ BaseType_t xProcessReceivedUDPPacket_IPv6( NetworkBufferDescriptor_t * pxNetwork
 
                         xSourceAddress.sin_port = pxNetworkBuffer->usPort;
                         destinationAddress.sin_port = usPort;
-                        ( void ) memcpy( xSourceAddress.sin_addr6.ucBytes, pxUDPPacket_IPv6->xIPHeader.xSourceAddress.ucBytes, ipSIZE_OF_IPv6_ADDRESS );
-                        ( void ) memcpy( destinationAddress.sin_addr6.ucBytes, pxUDPPacket_IPv6->xIPHeader.xDestinationAddress.ucBytes, ipSIZE_OF_IPv6_ADDRESS );
+                        ( void ) memcpy( xSourceAddress.sin_addr.xIP_IPv6.ucBytes, pxUDPPacket_IPv6->xIPHeader.xSourceAddress.ucBytes, ipSIZE_OF_IPv6_ADDRESS );
+                        ( void ) memcpy( destinationAddress.sin_addr.xIP_IPv6.ucBytes, pxUDPPacket_IPv6->xIPHeader.xDestinationAddress.ucBytes, ipSIZE_OF_IPv6_ADDRESS );
                         xSourceAddress.sin_family = ( uint8_t ) FREERTOS_AF_INET6;
                         destinationAddress.sin_family = ( uint8_t ) FREERTOS_AF_INET6;
                         xSourceAddress.sin_len = ( uint8_t ) sizeof( xSourceAddress );
@@ -580,7 +580,7 @@ BaseType_t xProcessReceivedUDPPacket_IPv6( NetworkBufferDescriptor_t * pxNetwork
             #if ( ipconfigUSE_NBNS == 1 )
                 /* a NetBIOS request, check for the destination port */
                 if( ( usPort == FreeRTOS_ntohs( ipNBNS_PORT ) ) ||
-                    ( pxUDPPacket_IPv6->xUDPHeader.usSourcePort == FreeRTOS_ntohs( ipNBNS_PORT ) ) )
+                    ( pxUDPPacket->xUDPHeader.usSourcePort == FreeRTOS_ntohs( ipNBNS_PORT ) ) )
                 {
                     xReturn = ( BaseType_t ) ulNBNSHandlePacket( pxNetworkBuffer );
                 }

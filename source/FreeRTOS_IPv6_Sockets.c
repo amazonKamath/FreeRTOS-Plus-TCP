@@ -43,10 +43,6 @@
 #include "FreeRTOS_IP.h"
 #include "FreeRTOS_IPv6_Sockets.h"
 
-/* *INDENT-OFF* */
-#if( ipconfigUSE_IPv6 != 0 )
-/* *INDENT-ON* */
-
 #if ( ipconfigUSE_TCP == 1 )
 
 /**
@@ -112,8 +108,8 @@ void * xSend_UDP_Update_IPv6( NetworkBufferDescriptor_t * pxNetworkBuffer,
     pxNetworkBuffer->xIPAddress.ulIP_IPv4 = 0U;
 
     configASSERT( pxDestinationAddress != NULL );
-    ( void ) memcpy( pxUDPPacket_IPv6->xIPHeader.xDestinationAddress.ucBytes, pxDestinationAddress->sin_address.xIP_IPv6.ucBytes, ipSIZE_OF_IPv6_ADDRESS );
-    ( void ) memcpy( pxNetworkBuffer->xIPAddress.xIP_IPv6.ucBytes, pxDestinationAddress->sin_address.xIP_IPv6.ucBytes, ipSIZE_OF_IPv6_ADDRESS );
+    ( void ) memcpy( pxUDPPacket_IPv6->xIPHeader.xDestinationAddress.ucBytes, pxDestinationAddress->sin_addr.xIP_IPv6.ucBytes, ipSIZE_OF_IPv6_ADDRESS );
+    ( void ) memcpy( pxNetworkBuffer->xIPAddress.xIP_IPv6.ucBytes, pxDestinationAddress->sin_addr.xIP_IPv6.ucBytes, ipSIZE_OF_IPv6_ADDRESS );
     pxUDPPacket_IPv6->xEthernetHeader.usFrameType = ipIPv6_FRAME_TYPE;
 
     return NULL;
@@ -139,11 +135,11 @@ size_t xRecv_Update_IPv6( const NetworkBufferDescriptor_t * pxNetworkBuffer,
     {
         if( pxSourceAddress != NULL )
         {
-            ( void ) memcpy( ( void * ) pxSourceAddress->sin_address.xIP_IPv6.ucBytes,
+            ( void ) memcpy( ( void * ) pxSourceAddress->sin_addr.xIP_IPv6.ucBytes,
                              ( const void * ) pxUDPPacketV6->xIPHeader.xSourceAddress.ucBytes,
                              ipSIZE_OF_IPv6_ADDRESS );
             pxSourceAddress->sin_family = ( uint8_t ) FREERTOS_AF_INET6;
-            pxSourceAddress->sin_address.ulIP_IPv4 = 0U;
+            pxSourceAddress->sin_addr.ulIP_IPv4 = 0U;
             pxSourceAddress->sin_port = pxNetworkBuffer->usPort;
         }
 
@@ -657,6 +653,3 @@ BaseType_t FreeRTOS_inet_pton6( const char * pcSource,
 }
 
 /*-----------------------------------------------------------*/
-/* *INDENT-OFF* */
-#endif /* ipconfigUSE_IPv6 != 0 */
-/* *INDENT-ON* */

@@ -41,10 +41,6 @@
 /* FreeRTOS+TCP includes. */
 #include "FreeRTOS_IP.h"
 
-/* *INDENT-OFF* */
-#if( ipconfigUSE_IPv6 != 0 )
-/* *INDENT-ON* */
-
 const struct xIPv6_Address in6addr_any = { 0 };
 const struct xIPv6_Address in6addr_loopback = { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 } };
 
@@ -395,7 +391,3 @@ eFrameProcessingResult_t eHandleIPv6ExtensionHeaders( NetworkBufferDescriptor_t 
 
 
 /*-----------------------------------------------------------*/
-
-/* *INDENT-OFF* */
-#endif /* ( ipconfigUSE_IPv6 != 0 ) */
-/* *INDENT-ON* */
